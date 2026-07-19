@@ -39,6 +39,7 @@
 ///                directly (only new_shade_screen.dart does, and it
 ///                isn't in the R6-003 list).
 ///
+<<<<<<< HEAD
 ///                Also provides settle() (R7.1 fix): LoadingView
 ///                (lib/widgets/loading_view.dart) uses an
 ///                *indeterminate* CircularProgressIndicator, which
@@ -56,15 +57,59 @@
 ///                test that genuinely settles quickly, which is all
 ///                of them against this harness's fast in-memory
 ///                database.
+=======
+///                Also provides settle() (R7.1, revised in this CI
+///                Widget Test Repair pass): LoadingView
+///                (lib/widgets/loading_view.dart) uses an
+///                *indeterminate* CircularProgressIndicator, which
+///                repeats forever by design — tester.pumpAndSettle()
+///                cannot tell "still loading" from "stuck forever", it
+///                just keeps pumping the spinner's frames until it
+///                hits a timeout. R7.1 capped that timeout at 10
+///                seconds instead of the 10-minute default, which
+///                correctly turned a 10-minute CI hang into a fast
+///                failure — but it was still pumpAndSettle() deciding
+///                when to stop, and a real CI run then surfaced the
+///                actual root cause it was fast-failing on: a Batch
+///                opened inside onCreate() was fighting onCreate's own
+///                implicit transaction for the write lock (see
+///                _openTestDatabase() below), leaving the database
+///                stuck mid-initialization so every query genuinely
+///                never completed. That's now fixed at the source.
+///                With it fixed, settle() no longer needs
+///                pumpAndSettle() at all: it pumps a fixed, small
+///                number of frames (matching the deterministic
+///                bounded-loop pattern already used for engine
+///                startup elsewhere in this test suite) and returns,
+///                regardless of whether an indeterminate animation is
+///                still running somewhere in the tree. This is
+///                strictly deterministic — no dependency on Flutter's
+///                own "wait until stable" heuristic, so an
+///                indeterminate spinner can never cause it to hang or
+///                even need a timeout to fall back on.
+>>>>>>> f931330 (Fix widget test deadlocks and CI stability)
 /// Change History:
 ///   1.0.0 - Repair Sprint R6 (Production Readiness & QA) - Initial
 ///           creation.
 ///   1.1.0 - R7.1 (Final Release Validation fix) - Added settle()
+<<<<<<< HEAD
 ///           and ensureSqfliteFfiInitialized() — see the two notes
 ///           above. No change to what is registered or how.
 library;
 
 import 'package:flutter/material.dart';
+=======
+///           (then pumpAndSettle()-with-10s-timeout-based) and
+///           ensureSqfliteFfiInitialized().
+///   1.2.0 - CI Widget Test Repair - Fixed _openTestDatabase()'s
+///           onCreate to use plain sequential db.execute() instead of
+///           a Batch (root cause of the "database has been locked"/
+///           "already closed" cascade CI actually hit). Rewrote
+///           settle() as a fully deterministic bounded pump loop,
+///           removing its last dependency on pumpAndSettle() entirely.
+library;
+
+>>>>>>> f931330 (Fix widget test deadlocks and CI stability)
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -224,6 +269,7 @@ const Map<String, List<String>> _kTestSchemaColumns = <String, List<String>>{
   ],
 };
 
+<<<<<<< HEAD
 /// Same as `tester.pumpAndSettle()`, but with an explicit 10-second
 /// timeout instead of pumpAndSettle()'s own 10-minute default — see
 /// this file's header for why that default is the literal source of
@@ -237,6 +283,30 @@ Future<void> settle(WidgetTester tester) {
     EnginePhase.sendSemanticsUpdate,
     const Duration(seconds: 10),
   );
+=======
+/// Deterministic replacement for `tester.pumpAndSettle()`. Pumps one
+/// immediate frame, then [extraPumps] more frames [step] apart, and
+/// returns — it never asks "has everything stopped animating?" the
+/// way pumpAndSettle() does, so an indeterminate spinner (LoadingView
+/// uses one) can't make it wait indefinitely; there is nothing here
+/// for it to wait *on*. Each pump() still drains the microtask queue
+/// once, which is what actually lets an in-flight repository query
+/// resolve and its rebuild happen — 21 pumps is comfortably more than
+/// this harness's fast in-memory-SQLite screens need, including
+/// multi-hop chains like FormulaDetailsScreen's per-ingredient
+/// IMaterialMatchingEngine calls. Bounded and fixed-cost either way:
+/// nothing here can hang, and nothing here can take longer than
+/// [extraPumps] frames regardless of what's on screen.
+Future<void> settle(
+  WidgetTester tester, {
+  int extraPumps = 20,
+  Duration step = const Duration(milliseconds: 100),
+}) async {
+  await tester.pump();
+  for (int i = 0; i < extraPumps; i++) {
+    await tester.pump(step);
+  }
+>>>>>>> f931330 (Fix widget test deadlocks and CI stability)
 }
 
 bool _sqfliteFfiInitialized = false;
@@ -261,11 +331,27 @@ Future<Database> _openTestDatabase() async {
     options: OpenDatabaseOptions(
       version: 1,
       onCreate: (Database db, int version) async {
+<<<<<<< HEAD
         final Batch batch = db.batch();
         for (final MapEntry<String, List<String>> entry
             in _kTestSchemaColumns.entries) {
           final String columns = entry.value.join(', ');
           batch.execute('''
+=======
+        // onCreate already runs inside an implicit transaction — a
+        // separate Batch here previously fought that transaction for
+        // the write lock (confirmed by CI: "Warning database has been
+        // locked for 0:00:10.000000... use the transaction object for
+        // database operations during a transaction", followed by
+        // pumpAndSettle/test timeouts on every test). Plain sequential
+        // execute() calls are exactly what the already-working
+        // product_repository_test.dart uses for its own single-table
+        // onCreate — no Batch involved there either.
+        for (final MapEntry<String, List<String>> entry
+            in _kTestSchemaColumns.entries) {
+          final String columns = entry.value.join(', ');
+          await db.execute('''
+>>>>>>> f931330 (Fix widget test deadlocks and CI stability)
             CREATE TABLE ${entry.key} (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               $columns,
@@ -275,7 +361,10 @@ Future<Database> _openTestDatabase() async {
             )
           ''');
         }
+<<<<<<< HEAD
         await batch.commit(noResult: true);
+=======
+>>>>>>> f931330 (Fix widget test deadlocks and CI stability)
       },
     ),
   );
@@ -285,11 +374,27 @@ Future<Database> _openTestDatabase() async {
 /// every repository/engine the ten R6-003 screens use, all pointed
 /// at it. Call [WidgetTestHarness.open] in setUp and
 /// [WidgetTestHarness.close] in tearDown.
+<<<<<<< HEAD
+=======
+///
+/// Lifecycle contract: each test gets its own fresh database (a new
+/// [WidgetTestHarness.open] call in that test's own setUp — never
+/// shared or reused across tests) and its own fresh ServiceLocator
+/// registrations. Call [settle] (above) before your test's last
+/// assertion so every repository call the widget triggered has
+/// actually completed *before* tearDown calls [close] — that
+/// ordering, not anything close() can do after the fact, is what
+/// prevents a query from touching the database after it's gone.
+>>>>>>> f931330 (Fix widget test deadlocks and CI stability)
 class WidgetTestHarness {
   WidgetTestHarness._(this._db, this.databaseHelper);
 
   final Database _db;
   final DatabaseHelper databaseHelper;
+<<<<<<< HEAD
+=======
+  bool _closed = false;
+>>>>>>> f931330 (Fix widget test deadlocks and CI stability)
 
   static Future<WidgetTestHarness> open() async {
     final Database db = await _openTestDatabase();
@@ -300,6 +405,22 @@ class WidgetTestHarness {
   }
 
   Future<void> close() async {
+<<<<<<< HEAD
+=======
+    if (_closed) {
+      // Never double-close: sqflite itself throws on a second close(),
+      // and a defensive no-op here is the correct response to that,
+      // not a hidden bug — the actual close below already happened.
+      return;
+    }
+    _closed = true;
+    // One microtask-queue drain for anything scheduled but not yet
+    // run at the moment tearDown fired — belt-and-suspenders on top
+    // of each test calling settle() before its own last assertion,
+    // which is the real guarantee that nothing is still in flight
+    // here.
+    await Future<void>.delayed(Duration.zero);
+>>>>>>> f931330 (Fix widget test deadlocks and CI stability)
     ServiceLocator.instance.reset();
     await _db.close();
   }
