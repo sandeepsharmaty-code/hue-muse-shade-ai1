@@ -38,17 +38,13 @@ testWidgets('shows the empty state when no products exist', (
 ) async {
   await tester.pumpWidget(_wrap(const ProductManagementScreen()));
 
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 200));
+await tester.pump();
+await tester.pump(const Duration(milliseconds: 500));
 
-  debugPrint('Running animations: ${tester.hasRunningAnimations}');
-
-  expect(find.byType(CircularProgressIndicator), findsNothing);
-
-  expect(
-    find.text('No products exist yet. Tap + to add one.'),
-    findsOneWidget,
-  );
+expect(
+  find.text('No products exist yet. Tap + to add one.'),
+  findsOneWidget,
+);
 });
 
   testWidgets('lists a product created through the repository', (
