@@ -33,15 +33,23 @@ void main() {
   tearDown(() async {
     await harness.close();
   });
+testWidgets('shows the empty state when no products exist', (
+  WidgetTester tester,
+) async {
+  await tester.pumpWidget(_wrap(const ProductManagementScreen()));
 
-  testWidgets('shows the empty state when no products exist', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(_wrap(const ProductManagementScreen()));
-    await settle(tester);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
 
-    expect(find.text('No products exist yet. Tap + to add one.'), findsOneWidget);
-  });
+  debugPrint('Running animations: ${tester.hasRunningAnimations}');
+
+  expect(find.byType(CircularProgressIndicator), findsNothing);
+
+  expect(
+    find.text('No products exist yet. Tap + to add one.'),
+    findsOneWidget,
+  );
+});
 
   testWidgets('lists a product created through the repository', (
     WidgetTester tester,
@@ -55,8 +63,7 @@ void main() {
         category: 'Nail Polish',
       ),
     );
-
-    await tester.pumpWidget(_wrap(const ProductManagementScreen()));
+  await tester.pumpWidget(_wrap(const ProductManagementScreen()));
     await settle(tester);
 
     expect(find.text('Classic Nail Polish'), findsOneWidget);
