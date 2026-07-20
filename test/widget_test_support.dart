@@ -301,7 +301,6 @@ class WidgetTestHarness {
 
   Future<void> close() async {
     ServiceLocator.instance.reset();
-    await _db.close();
   }
 
   void _registerAll() {
